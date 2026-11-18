@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Mét sê gi" />
+  <title>Mét sê gi</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+    body { background: #f2f2f7; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+    header { background: rgba(255,255,255,0.92); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); padding: calc(env(safe-area-inset-top) + 12px) 16px 12px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e5e5ea; }
+    header h1 { font-size: 17px; font-weight: 600; color: #000; }
+    .role-switch { display: flex; background: #e5e5ea; border-radius: 8px; padding: 2px; }
+    .role-btn { border: none; background: transparent; padding: 5px 14px; font-size: 13px; font-weight: 600; border-radius: 6px; color: #666; }
+    .role-btn.active { background: #fff; color: #007aff; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    #chat-box { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 8px; -webkit-overflow-scrolling: touch; }
+    .msg { max-width: 75%; padding: 10px 14px; border-radius: 18px; font-size: 16px; line-height: 1.4; word-wrap: break-word; }
+    .msg.me { align-self: flex-end; background: #007aff; color: #fff; border-bottom-right-radius: 4px; }
+    .msg.other { align-self: flex-start; background: #e5e5ea; color: #000; border-bottom-left-radius: 4px; }
+    .msg-time { font-size: 10px; opacity: 0.65; margin-top: 4px; text-align: right; }
+    footer { background: #fff; padding: 10px 12px calc(env(safe-area-inset-bottom) + 10px); display: flex; gap: 8px; align-items: center; border-top: 1px solid #e5e5ea; }
+    #msg-input { flex: 1; border: 1px solid #d1d1d6; border-radius: 20px; padding: 10px 16px; font-size: 16px; outline: none; background: #f9f9f9; }
+    #send-btn { background: #007aff; color: #fff; border: none; border-radius: 50%; width: 38px; height: 38px; font-size: 16px; font-weight: bold; display: flex; align-items: center; justify-content: center; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Mét sê gi ❤️</h1>
+    <div class="role-switch">
+      <button class="role-btn" id="btn-anh" onclick="setRole('Anh')">Anh</button>
+      <button class="role-btn" id="btn-em" onclick="setRole('Em')">Em</button>
+    </div>
+  </header>
+  <div id="chat-box"></div>
+  <footer>
+    <input type="text" id="msg-input" placeholder="Nhắn tin..." autocomplete="off" />
+    <button id="send-btn" onclick="sendMessage()">➤</button>
+  </footer>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getFirestore, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyC3F8UwljVUkAjV9FdnchYRjQgLdiYt_eA",
+      authDomain: "message4703.firebaseapp.com",
+      projectId: "message4703",
+      storageBucket: "message4703.firebasestorage.app",
+      messagingSenderId: "155410397895",
+      appId: "1:155410397895:web:88b66b3b3320b7d1261ce2",
+      measurementId: "G-4PKTYX0S89"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const messagesRef = collection(db, "messages");
+
+    let currentRole = localStorage.getItem("chat_role") || "Anh";
+    let allMessages = [];
+
+    window.setRole = function(role) {
+      currentRole = role;
+      localStorage.setItem("chat_role", role);
+      updateRoleUI();
+      renderMessages();
+    };
+
+    function updateRoleUI() {
+      document.getElementById("btn-anh").classList.toggle("active", currentRole === "Anh");
+      document.getElementById("btn-em").classList.toggle("active", currentRole === "Em");
+    }
+
+    onSnapshot(query(messagesRef, orderBy("timestamp", "asc")), (snapshot) => {
+      allMessages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      renderMessages();
+    });
+
+    function renderMessages() {
+      const chatBox = document.getElementById("chat-box");
+      chatBox.innerHTML = "";
+      allMessages.forEach(msg => {
+        const isMe = msg.sender === currentRole;
+        const div = document.createElement("div");
+        div.className = `msg ${isMe ? "me" : "other"}`;
+        let timeStr = "";
+        if (msg.timestamp && msg.timestamp.toDate) {
+          const d = msg.timestamp.toDate();
+          timeStr = d.getHours().toString().padStart(2, '0') + ":" + d.getMinutes().toString().padStart(2, '0');
+        }
+        div.innerHTML = `<div>${escapeHTML(msg.text || "")}</div><div class="msg-time">${timeStr}</div>`;
+        chatBox.appendChild(div);
+      });
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    window.sendMessage = async function() {
+      const input = document.getElementById("msg-input");
+      const text = input.value.trim();
+      if (!text) return;
+      input.value = "";
+      await addDoc(messagesRef, { sender: currentRole, text: text, timestamp: serverTimestamp() });
+    };
+
+    document.getElementById("msg-input").addEventListener("keypress", function(e) {
+      if (e.key === "Enter") { e.preventDefault(); sendMessage(); }
+    });
+
+    function escapeHTML(str) {
+      return str.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag]));
+    }
+
+    updateRoleUI();
+  </script>
+</body>
+</html>
